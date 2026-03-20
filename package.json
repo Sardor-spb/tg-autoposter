@@ -1,0 +1,14 @@
+{
+    "name": "tg-autoposter",
+    "version": "1.0.0",
+    "description": "Telegram autoposter for Tashkent real estate channel",
+    "main": "index.js",
+    "scripts": {
+          "start": "node index.js"
+    },
+    "dependencies": {
+          "@anthropic-ai/sdk": "^0.24.0",
+          "node-telegram-bot-api": "^0.64.0",
+          "node-cron": "^3.0.3"
+    }
+}
