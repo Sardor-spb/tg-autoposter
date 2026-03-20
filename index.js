@@ -7,59 +7,47 @@ const http = require("http");
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
 const CHANNEL_ID = process.env.CHANNEL_ID;
-const ROYEST_API_URL = process.env.ROYEST_API_URL || "http://royest-bot.railway.internal:3000";
+const ROYEST_API_URL = process.env.ROYEST_API_URL || "https://royest-bot-production.up.railway.app";
 const ROYEST_API_TOKEN = process.env.ROYEST_API_TOKEN || "royest2025";
 const SCRAPER_API_URL = process.env.SCRAPER_API_URL || "http://yangiuylar-scraper.railway.internal:3001";
 const SCRAPER_API_TOKEN = process.env.SCRAPER_API_TOKEN || "yangi2025";
+const PEXELS_API_KEY = process.env.PEXELS_API_KEY;
 
-// Прямые URL фото с Unsplash
-const PHOTO_URLS = {
-  "📊 Цена недели": [
-    "https://images.unsplash.com/photo-1582407947304-fd86f028f716?w=1080&q=80",
-    "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=1080&q=80",
-    "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=1080&q=80",
-  ],
-  "🏠 Лучшая сделка недели": [
-    "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=1080&q=80",
-    "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=1080&q=80",
-    "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1080&q=80",
-  ],
-  "🔑 Аренда $400+": [
-    "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=1080&q=80",
-    "https://images.unsplash.com/photo-1493809842364-78817add7ffb?w=1080&q=80",
-    "https://images.unsplash.com/photo-1560185007-cde436f6a4d0?w=1080&q=80",
-  ],
-  "🏗️ Новостройки": [
-    "https://images.unsplash.com/photo-1541976590-713941681591?w=1080&q=80",
-    "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=1080&q=80",
-    "https://images.unsplash.com/photo-1621155346337-1d19476ba7d6?w=1080&q=80",
-  ],
-  "📍 Район недели": [
-    "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=1080&q=80",
-    "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=1080&q=80",
-    "https://images.unsplash.com/photo-1444723121867-7a241cacace9?w=1080&q=80",
-  ],
-  "⚖️ Юридический ликбез": [
-    "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=1080&q=80",
-    "https://images.unsplash.com/photo-1450101499163-c8848c66ca85?w=1080&q=80",
-    "https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=1080&q=80",
-  ],
-  "💰 Считаем инвестицию": [
-    "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=1080&q=80",
-    "https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?w=1080&q=80",
-    "https://images.unsplash.com/photo-1559526324-4b87b5e36e44?w=1080&q=80",
-  ],
-  "🚨 Осторожно: мошенники": [
-    "https://images.unsplash.com/photo-1563986768609-322da13575f3?w=1080&q=80",
-    "https://images.unsplash.com/photo-1614064641938-3bbee52942c7?w=1080&q=80",
-    "https://images.unsplash.com/photo-1555949963-ff9fe0c870eb?w=1080&q=80",
-  ],
-  "📈 Дайджест дня": [
-    "https://images.unsplash.com/photo-1551836022-4c4c79ecde51?w=1080&q=80",
-    "https://images.unsplash.com/photo-1486325212027-8081e485255e?w=1080&q=80",
-    "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=1080&q=80",
-  ],
+// Поисковые запросы по рубрикам для Pexels
+const PEXELS_QUERIES = {
+  "📊 Цена недели": ["Tashkent city skyline", "real estate market city", "apartment building aerial"],
+  "🏠 Лучшая сделка недели": ["apartment keys sale", "real estate deal", "modern apartment sale"],
+  "🔑 Аренда $400+": ["modern apartment interior", "cozy apartment living room", "furnished apartment"],
+  "🏗️ Новостройки": ["new building construction", "modern residential complex", "apartment construction site"],
+  "⚖️ Юридический ликбез": ["contract signing documents", "legal documents pen", "real estate lawyer"],
+  "💰 Считаем инвестицию": ["real estate investment", "calculator finance", "property investment money"],
+  "🚨 Осторожно: мошенники": ["fraud warning security", "scam alert", "caution sign danger"],
+  "📈 Дайджест дня": ["city real estate aerial", "tashkent panorama", "urban skyline buildings"],
 };
+
+// Получаем фото с Pexels по рубрике
+async function getPexelsPhoto(rubric) {
+  if (!PEXELS_API_KEY) return null;
+  const queries = PEXELS_QUERIES[rubric] || PEXELS_QUERIES["📈 Дайджест дня"];
+  const query = queries[Math.floor(Math.random() * queries.length)];
+  return new Promise((resolve) => {
+    const url = "https://api.pexels.com/v1/search?query=" + encodeURIComponent(query) + "&per_page=15&orientation=landscape";
+    https.get(url, { headers: { Authorization: PEXELS_API_KEY } }, (res) => {
+      let data = "";
+      res.on("data", c => data += c);
+      res.on("end", () => {
+        try {
+          const json = JSON.parse(data);
+          const photos = json.photos || [];
+          if (!photos.length) return resolve(null);
+          // Берём случайное фото из топ-15
+          const photo = photos[Math.floor(Math.random() * photos.length)];
+          resolve(photo.src.large || photo.src.original);
+        } catch(e) { resolve(null); }
+      });
+    }).on("error", () => resolve(null)).setTimeout(8000, function() { this.destroy(); resolve(null); });
+  });
+}
 
 // Контент-план
 const CONTENT_PLAN = [
@@ -104,9 +92,6 @@ function getWeeklyTopic(key) {
   return topics[week % topics.length] || key;
 }
 
-function getRandomItem(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-function getPhotoUrl(rubric) { return getRandomItem(PHOTO_URLS[rubric] || PHOTO_URLS["📈 Дайджест дня"]); }
-
 function apiGet(baseUrl, token, path) {
   return new Promise((resolve) => {
     const urlObj = new URL(baseUrl + path);
@@ -127,90 +112,82 @@ function apiGet(baseUrl, token, path) {
 }
 
 function formatPrices(data) {
-  if (!data?.districts?.length) return "Ориентиры: Шайхантахур $3000-5000/м², Мирабад $2000-4000/м², Юнусабад $1200-2000/м², Чиланзар $900-1400/м², Сергели $600-900/м².";
-  return "Данные мониторинга за 7 дней:\n" + data.districts.map(d => {
+  if (!data?.districts?.length) return null;
+  return data.districts.map(d => {
     const trend = d.change_percent ? (d.change_percent > 0 ? " ↑+" + d.change_percent + "%" : " ↓" + d.change_percent + "%") : "";
-    return d.district + ": $" + d.min_price_per_m2 + "-" + d.max_price_per_m2 + "/м² (avg $" + d.avg_price_per_m2 + trend + ", " + d.count + " объявл.)";
+    return d.district + ": $" + d.min_price_per_m2 + "–" + d.max_price_per_m2 + "/м² (avg $" + d.avg_price_per_m2 + trend + ", " + d.count + " объявл.)";
   }).join("\n");
 }
 
 function formatDeals(data) {
-  if (!data?.deals?.length) return "Данные временно недоступны.";
-  return data.deals.map((d, i) => (i+1) + ". " + d.district + " — $" + d.price_usd + " ($" + d.price_per_m2 + "/м², " + d.area + "м², " + d.rooms + "к)").join("\n");
+  if (!data?.deals?.length) return null;
+  return data.deals.map((d, i) => (i+1) + ". " + d.district + " — $" + d.price_usd + " ($" + d.price_per_m2 + "/м², " + d.area + "м², " + d.rooms + "к)" + (d.id ? "\n   🔗 olx.uz/obyavlenie/" + d.id : "")).join("\n");
 }
 
 function formatRent(data) {
-  if (!data?.districts?.length) return "Ориентиры аренды $400+: Шайхантахур $800-2000, Мирабад $600-1500, Юнусабад $500-1000, Чиланзар $400-700/мес";
-  let r = "Аренда $400+ по районам:\n" + data.districts.map(d => d.district + ": $" + d.min_price_per_m2 + "-" + d.max_price_per_m2 + "/мес (" + d.count + " объявл.)").join("\n");
-  if (data.top_deals?.length) r += "\n\nЛучшие предложения:\n" + data.top_deals.map((d,i) => (i+1) + ". " + d.district + " — $" + d.price_usd + "/мес (" + d.area + "м², " + d.rooms + "к)").join("\n");
+  if (!data?.districts?.length) return null;
+  let r = data.districts.map(d => d.district + ": $" + d.min_price_per_m2 + "–" + d.max_price_per_m2 + "/мес (" + d.count + " объявл.)").join("\n");
+  if (data.top_deals?.length) r += "\n\nЛучшие предложения:\n" + data.top_deals.map((d,i) => (i+1) + ". " + d.district + " — $" + d.price_usd + "/мес (" + d.area + "м², " + d.rooms + "к)" + (d.id ? "\n   🔗 olx.uz/obyavlenie/" + d.id : "")).join("\n");
   return r;
 }
 
 function formatNewBuilds(data) {
-  if (!data?.complexes?.length) {
-    return "По данным мониторинга рынка:\nЮнусабад от $900/м² (рассрочка до 24 мес), Мирзо-Улугбек от $750/м² (рассрочка до 18 мес), Сергели от $500/м² (рассрочка до 36 мес). Застройщики: ISA Homes, Munis Group, Milliy Qurilish.";
-  }
-  // Берём 3 случайных объекта из базы
+  if (!data?.complexes?.length) return null;
   const sample = data.complexes.sort(() => Math.random() - 0.5).slice(0, 4);
-  return "По данным мониторинга рынка новостроек:\n" + sample.map(c => {
+  return sample.map(c => {
     const price = c.price_per_m2_usd ? "$" + c.price_per_m2_usd + "/м²" : "цена по запросу";
     const deadline = c.deadline ? " | сдача: " + c.deadline : "";
     const installment = c.installment_months ? " | рассрочка " + c.installment_months + " мес" : "";
-    const finishing = c.finishing ? " | " + c.finishing : "";
-    return "• " + c.name + " (" + (c.district || "Ташкент") + ") — " + price + deadline + installment + finishing;
+    return "• " + c.name + " (" + (c.district || "Ташкент") + ") — " + price + deadline + installment;
   }).join("\n");
 }
 
 async function buildPromptData(item) {
   if (item.type === "PRICES") {
     const data = await apiGet(ROYEST_API_URL, ROYEST_API_TOKEN, "/api/prices");
-    return { topic: "Цены на квартиры (продажа) по районам Ташкента.\n" + formatPrices(data), extra: "Укажи тренд роста/падения по каждому району если есть." };
+    const formatted = formatPrices(data);
+    return { topic: formatted ? "Реальные данные мониторинга OLX за 7 дней:\n" + formatted : null, extra: "Напиши аналитический разбор — какие районы растут, какие падают, где выгоднее покупать сейчас." };
   }
   if (item.type === "DEALS") {
     const data = await apiGet(ROYEST_API_URL, ROYEST_API_TOKEN, "/api/deals");
-    return { topic: "Лучшие сделки недели — самые дешёвые квартиры за м² на рынке Ташкента.\n" + formatDeals(data), extra: "Объясни почему эти объекты выгодны и на что обратить внимание при проверке." };
+    const formatted = formatDeals(data);
+    return { topic: formatted ? "Топ выгодных сделок по данным OLX:\n" + formatted : null, extra: "Объясни почему эти объекты выгодны по цене за м² и на что обратить внимание при проверке." };
   }
   if (item.type === "RENT") {
     const data = await apiGet(ROYEST_API_URL, ROYEST_API_TOKEN, "/api/rent");
-    return { topic: "Аренда квартир от $400/месяц в Ташкенте.\n" + formatRent(data), extra: "Только $400+. Что получаешь за эти деньги, какие районы лучше для каких целей." };
+    const formatted = formatRent(data);
+    return { topic: formatted ? "Аренда $400+ по данным OLX:\n" + formatted : null, extra: "Что реально можно снять за эти деньги в каждом районе, какие районы лучше для каких целей." };
   }
   if (item.type === "NEWBUILDS") {
-    // Берём данные из estate-scraper — реальные новостройки
     const data = await apiGet(SCRAPER_API_URL, SCRAPER_API_TOKEN, "/api/complexes?limit=20");
     const cheapest = await apiGet(SCRAPER_API_URL, SCRAPER_API_TOKEN, "/api/cheapest?limit=3");
-    const newBuildsText = formatNewBuilds(data);
-    const cheapestText = cheapest?.complexes?.length
-      ? "\n\nСамые доступные на сегодня:\n" + cheapest.complexes.map(c => "• " + c.name + " (" + c.district + ") от $" + c.price_per_m2_usd + "/м²" + (c.installment_months ? ", рассрочка " + c.installment_months + " мес" : "") + (c.deadline ? ", сдача " + c.deadline : "")).join("\n")
-      : "";
-    return {
-      topic: newBuildsText + cheapestText,
-      extra: "Напиши экспертный разбор: как выбрать новостройку, на что смотреть — документы застройщика, разрешение на строительство, финансовые гарантии. Конкретные советы покупателям 2026."
-    };
+    const nb = formatNewBuilds(data);
+    const cheap = cheapest?.complexes?.length ? "\n\nСамые доступные:\n" + cheapest.complexes.map(c => "• " + c.name + " от $" + c.price_per_m2_usd + "/м²" + (c.installment_months ? ", рассрочка " + c.installment_months + " мес" : "") + (c.deadline ? ", сдача " + c.deadline : "")).join("\n") : "";
+    return { topic: nb ? "По данным мониторинга рынка новостроек:\n" + nb + cheap : null, extra: "Экспертный разбор: как выбрать новостройку, документы застройщика, финансовые гарантии." };
   }
-  // STATIC
   return { topic: getWeeklyTopic(item.topic), extra: "" };
 }
 
 async function generatePost(rubric, promptData) {
   const response = await claude.messages.create({
     model: "claude-sonnet-4-5",
-    max_tokens: 1200,
+    max_tokens: 1400,
     messages: [{ role: "user", content: `Ты эксперт по недвижимости Ташкента. Напиши Telegram пост.
 
 РУБРИКА: ${rubric}
-ДАННЫЕ: ${promptData.topic}
+ДАННЫЕ: ${promptData.topic || "нет данных — используй экспертные знания о рынке Ташкента 2026"}
 УТОЧНЕНИЕ: ${promptData.extra || ""}
 
 СТРУКТУРА:
 1. Цепляющий заголовок (1 строка)
-2. 2-3 абзаца с конкретными цифрами и практическими советами
+2. 3-4 абзаца с конкретными цифрами и практическими советами
 3. Ключевой вывод
 4. Призыв к комментариям
-5. 2-3 хештега
+5. 3 хештега
 6. Разделитель: ——
-7. ПОЛНЫЙ перевод на узбекский язык (такой же объём — не краткий)
+7. ПОЛНЫЙ перевод на узбекский язык — такой же объём как русская версия, не сокращай!
 
-Без markdown. До 1800 символов. Год: 2026. Данные подаём как собственный мониторинг рынка — без указания сторонних источников.` }],
+Без markdown. До 1800 символов. Год: 2026. Данные подаём как собственный мониторинг рынка.` }],
   });
   return response.content[0].text;
 }
@@ -218,29 +195,30 @@ async function generatePost(rubric, promptData) {
 async function publishPost(item) {
   console.log("[" + new Date().toISOString() + "] Генерирую: " + item.rubric);
   try {
-    const promptData = await buildPromptData(item);
+    const [promptData, photoUrl] = await Promise.all([
+      buildPromptData(item),
+      getPexelsPhoto(item.rubric),
+    ]);
     const text = await generatePost(item.rubric, promptData);
     const caption = text.length > 1024 ? text.substring(0, 1021) + "..." : text;
-    await bot.sendPhoto(CHANNEL_ID, getPhotoUrl(item.rubric), { caption });
+    if (photoUrl) {
+      await bot.sendPhoto(CHANNEL_ID, photoUrl, { caption });
+    } else {
+      await bot.sendMessage(CHANNEL_ID, item.rubric + "\n\n" + text);
+    }
     console.log("[" + new Date().toISOString() + "] Опубликовано: " + item.rubric);
   } catch(e) {
     console.error("[" + new Date().toISOString() + "] Ошибка:", e.message);
-    try {
-      const promptData = await buildPromptData(item);
-      const text = await generatePost(item.rubric, promptData);
-      await bot.sendMessage(CHANNEL_ID, item.rubric + "\n\n" + text);
-    } catch(e2) { console.error("Fallback:", e2.message); }
   }
 }
 
-// Ежедневный дайджест 20:00 Ташкент
 async function publishDailyDigest() {
   console.log("[" + new Date().toISOString() + "] Генерирую дайджест...");
   try {
     const [priceData, dealsData, rentData] = await Promise.all([
       apiGet(ROYEST_API_URL, ROYEST_API_TOKEN, "/api/prices"),
       apiGet(ROYEST_API_URL, ROYEST_API_TOKEN, "/api/deals"),
-      apiGet(ROYEST_API_URL, ROYEST_API_TOKEN, "/api/rent")
+      apiGet(ROYEST_API_URL, ROYEST_API_TOKEN, "/api/rent"),
     ]);
 
     const today = new Date().toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Tashkent" });
@@ -252,28 +230,26 @@ async function publishDailyDigest() {
         saleBlock += "• " + d.district + ": $" + d.min_price_per_m2 + " – $" + d.max_price_per_m2 + trend + "\n";
       });
     } else {
-      saleBlock += "• Шайхантахур: $3000 – $5000\n• Мирабад: $2000 – $4000\n• Юнусабад: $1200 – $2000\n• Чиланзар: $900 – $1400\n• Сергели: $600 – $900\n";
+      saleBlock += "⏳ Данные обновляются...\n";
     }
 
     let rentBlock = "\n🔑 АРЕНДА от $400/мес:\n";
     if (rentData?.districts?.length) {
       rentData.districts.forEach(d => { rentBlock += "• " + d.district + ": $" + d.min_price_per_m2 + " – $" + d.max_price_per_m2 + "/мес\n"; });
     } else {
-      rentBlock += "• Шайхантахур: $800 – $2000/мес\n• Мирабад: $600 – $1500/мес\n• Юнусабад: $500 – $1000/мес\n• Чиланзар: $400 – $700/мес\n";
+      rentBlock += "⏳ Данные обновляются...\n";
     }
 
     let dealsBlock = "";
     if (dealsData?.deals?.length) {
       const c = dealsData.deals[0];
-      const p = dealsData.deals[dealsData.deals.length - 1];
-      dealsBlock = "\n💡 Самая дешёвая по м²:\n" + c.district + " — $" + c.price_usd + " ($" + c.price_per_m2 + "/м², " + c.area + "м²)\n" + (c.id ? "🔗 olx.uz/obyavlenie/" + c.id + "\n" : "") +
-        "\n📌 Самая дорогая из топа:\n" + p.district + " — $" + p.price_usd + " ($" + p.price_per_m2 + "/м², " + p.area + "м²)\n" + (p.id ? "🔗 olx.uz/obyavlenie/" + p.id + "\n" : "");
+      dealsBlock = "\n💡 Лучшая сделка дня:\n" + c.district + " — $" + c.price_usd + " ($" + c.price_per_m2 + "/м², " + c.area + "м²)" + (c.id ? "\n🔗 olx.uz/obyavlenie/" + c.id : "") + "\n";
     }
 
     let rentDealsBlock = "";
     if (rentData?.top_deals?.length) {
       const cr = rentData.top_deals[0];
-      rentDealsBlock = "\n💡 Лучшая аренда $400+:\n" + cr.district + " — $" + cr.price_usd + "/мес (" + cr.area + "м², " + cr.rooms + "к)\n" + (cr.id ? "🔗 olx.uz/obyavlenie/" + cr.id + "\n" : "");
+      rentDealsBlock = "\n💡 Лучшая аренда $400+:\n" + cr.district + " — $" + cr.price_usd + "/мес (" + cr.area + "м², " + cr.rooms + "к)" + (cr.id ? "\n🔗 olx.uz/obyavlenie/" + cr.id : "") + "\n";
     }
 
     const text = "📈 ДАЙДЖЕСТ НЕДВИЖИМОСТИ\n" + today + "\n" +
@@ -282,22 +258,26 @@ async function publishDailyDigest() {
       "\n━━━━━━━━━━━━━━━━━━━━\n" +
       "@sardorestate";
 
+    const photoUrl = await getPexelsPhoto("📈 Дайджест дня");
     const caption = text.length > 1024 ? text.substring(0, 1021) + "..." : text;
-    await bot.sendPhoto(CHANNEL_ID, getPhotoUrl("📈 Дайджест дня"), { caption });
+    if (photoUrl) {
+      await bot.sendPhoto(CHANNEL_ID, photoUrl, { caption });
+    } else {
+      await bot.sendMessage(CHANNEL_ID, text);
+    }
     console.log("[" + new Date().toISOString() + "] Дайджест опубликован");
   } catch(e) { console.error("Ошибка дайджеста:", e.message); }
 }
 
-// Расписание
+// Расписание — 10:00 Ташкент = 05:00 UTC
 CONTENT_PLAN.forEach(item => {
   cron.schedule(item.minute + " " + (item.hour - 5) + " * * " + item.day, () => publishPost(item));
-  console.log("Запланировано: " + item.rubric + " день " + item.day + " " + item.hour + ":00 Ташкент");
 });
 
-// Дайджест каждый день 20:00 Ташкент = 15:00 UTC
+// Дайджест 20:00 Ташкент = 15:00 UTC
 cron.schedule("0 15 * * *", () => publishDailyDigest());
 
 if (process.env.TEST_MODE === "true") publishPost(CONTENT_PLAN[0]);
 if (process.env.TEST_DIGEST === "true") publishDailyDigest();
 
-console.log("Автопостер v7 — новостройки из мониторинга, дайджест 20:00");
+console.log("Автопостер v8 — Pexels фото, реальные данные OLX, полный узбекский перевод");
