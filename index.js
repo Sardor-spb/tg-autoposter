@@ -13,7 +13,7 @@ const ROYEST_API_TOKEN = process.env.ROYEST_API_TOKEN || "royest2025";
 
 const CONTENT_PLAN = [
   { day: 1, hour: 10, minute: 0, rubric: "📊 Цена недели", topic: "РЕАЛЬНЫЕ_ЦЕНЫ", color: "1a1a2e" },
-  { day: 2, hour: 10, minute: 0, rubric: "📍 Район недели", topic: "Обзор района Ташкента — инфраструктура, плюсы и минусы, цены, прогноз роста.", color: "0d1b2a" },
+  { day: 2, hour: 10, minute: 0, rubric: "📍 Район недели", topic: "Обзор одного района Ташкента — инфраструктура, плюсы и минусы, цены, прогноз роста.", color: "0d1b2a" },
   { day: 3, hour: 10, minute: 0, rubric: "⚖️ Юридический ликбез", topic: "Один юридический аспект при покупке недвижимости в Ташкенте. Кадастр, договор, задаток.", color: "1a0533" },
   { day: 4, hour: 10, minute: 0, rubric: "❓ Вопрос-ответ", topic: "Частый вопрос покупателей недвижимости Ташкента. Котлован, торги, застройщики.", color: "0f1923" },
   { day: 5, hour: 10, minute: 0, rubric: "💰 Считаем инвестицию", topic: "Разбор объекта недвижимости Ташкента как инвестиции. Цена, аренда, ROI.", color: "0a2e1a" },
@@ -67,14 +67,26 @@ async function generatePost(rubric, topic, item) {
   let realTopic = topic;
   if (topic === "РЕАЛЬНЫЕ_ЦЕНЫ") {
     const pricesData = await fetchRealPrices();
-    const pricesText = formatPricesForPrompt(pricesData);
-    realTopic = "Цены на квартиры по районам Ташкента. " + pricesText;
+    realTopic = "Цены на квартиры по районам Ташкента. " + formatPricesForPrompt(pricesData);
   }
 
   const response = await claude.messages.create({
     model: "claude-sonnet-4-5",
-    max_tokens: 800,
-    messages: [{ role: "user", content: "Ты эксперт по недвижимости Ташкента. Напиши короткий Telegram пост (максимум 900 символов).\nРУБРИКА: " + rubric + "\nТЕМА И ДАННЫЕ: " + realTopic + "\nПравила: заголовок (1 строка), 2-3 абзаца с конкретными цифрами, вывод, призыв к комментариям, 2-3 хештега. Потом разделитель —— и краткая версия на узбекском (150 символов).\nБез markdown. Весь текст не более 900 символов. Используй только предоставленные реальные данные — не выдумывай цифры." }],
+    max_tokens: 1200,
+    messages: [{ role: "user", content: `Ты эксперт по недвижимости Ташкента. Напиши Telegram пост на двух языках.
+
+РУБРИКА: ${rubric}
+ТЕМА И ДАННЫЕ: ${realTopic}
+
+СТРУКТУРА ПОСТА:
+1. Заголовок на русском (1 строка, цепляющий)
+2. 2-3 абзаца на русском с конкретными цифрами и советами
+3. Призыв к комментариям на русском
+4. 2-3 хештега
+5. Разделитель: ——
+6. ПОЛНОЦЕННЫЙ перевод на узбекский язык (не краткий пересказ, а полный перевод всего поста выше — заголовок, все абзацы, призыв, хештеги на узбекском)
+
+ВАЖНО: Узбекская часть должна быть такого же объёма как русская — это полноценный перевод для узбекоязычной аудитории. Без markdown. Общий текст не более 1800 символов. Используй только реальные данные.` }],
   });
   return response.content[0].text;
 }
@@ -88,7 +100,7 @@ async function publishPost(rubric, topic, item) {
       encodeURIComponent(rubric + "\n@sardorestate");
     imagePath = "/tmp/post_" + Date.now() + ".png";
     await downloadImage(imageUrl, imagePath);
-    const caption = text.length > 950 ? text.substring(0, 950) + "..." : text;
+    const caption = text.length > 1024 ? text.substring(0, 1021) + "..." : text;
     await bot.sendPhoto(CHANNEL_ID, imagePath, { caption: caption });
     console.log("[" + new Date().toISOString() + "] Опубликовано: " + rubric);
   } catch (e) {
@@ -113,4 +125,4 @@ if (process.env.TEST_MODE === "true") {
   publishPost("📊 Цена недели", "РЕАЛЬНЫЕ_ЦЕНЫ", CONTENT_PLAN[0]);
 }
 
-console.log("Автопостер с реальными данными запущен.");
+console.log("Автопостер запущен.");
