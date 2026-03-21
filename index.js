@@ -13,7 +13,6 @@ const SCRAPER_API_URL = process.env.SCRAPER_API_URL || "http://yangiuylar-scrape
 const SCRAPER_API_TOKEN = process.env.SCRAPER_API_TOKEN || "yangi2025";
 const PEXELS_API_KEY = process.env.PEXELS_API_KEY;
 
-// Поисковые запросы по рубрикам для Pexels
 const PEXELS_QUERIES = {
   "📊 Цена недели": ["Tashkent city skyline", "real estate market city", "apartment building aerial"],
   "🏠 Лучшая сделка недели": ["apartment keys sale", "real estate deal", "modern apartment sale"],
@@ -25,7 +24,6 @@ const PEXELS_QUERIES = {
   "📈 Дайджест дня": ["city real estate aerial", "tashkent panorama", "urban skyline buildings"],
 };
 
-// Получаем фото с Pexels по рубрике
 async function getPexelsPhoto(rubric) {
   if (!PEXELS_API_KEY) return null;
   const queries = PEXELS_QUERIES[rubric] || PEXELS_QUERIES["📈 Дайджест дня"];
@@ -40,16 +38,14 @@ async function getPexelsPhoto(rubric) {
           const json = JSON.parse(data);
           const photos = json.photos || [];
           if (!photos.length) return resolve(null);
-          // Берём случайное фото из топ-15
           const photo = photos[Math.floor(Math.random() * photos.length)];
-          resolve(photo.src.large || photo.src.original);
+          resolve(photo.src.large2x || photo.src.large || photo.src.original);
         } catch(e) { resolve(null); }
       });
     }).on("error", () => resolve(null)).setTimeout(8000, function() { this.destroy(); resolve(null); });
   });
 }
 
-// Контент-план
 const CONTENT_PLAN = [
   { day: 1, hour: 10, minute: 0, rubric: "📊 Цена недели",          type: "PRICES" },
   { day: 2, hour: 10, minute: 0, rubric: "🏠 Лучшая сделка недели", type: "DEALS" },
@@ -60,7 +56,6 @@ const CONTENT_PLAN = [
   { day: 0, hour: 10, minute: 0, rubric: "🚨 Осторожно: мошенники", type: "STATIC", topic: "МОШЕННИКИ" },
 ];
 
-// Темы ротации по неделям
 const WEEKLY_TOPICS = {
   "ЮРИДИКА": [
     "Задаток при покупке квартиры в Ташкенте в 2026 году: как оформить правильно, какую сумму давать, что прописать в договоре.",
@@ -115,7 +110,7 @@ function formatPrices(data) {
   if (!data?.districts?.length) return null;
   return data.districts.map(d => {
     const trend = d.change_percent ? (d.change_percent > 0 ? " ↑+" + d.change_percent + "%" : " ↓" + d.change_percent + "%") : "";
-    return d.district + ": $" + d.min_price_per_m2 + "–" + d.max_price_per_m2 + "/м² (avg $" + d.avg_price_per_m2 + trend + ", " + d.count + " объявл.)";
+    return d.district + ": $" + d.min_price_per_m2 + "–$" + d.max_price_per_m2 + "/м² (avg $" + d.avg_price_per_m2 + trend + ", " + d.count + " объявл.)";
   }).join("\n");
 }
 
@@ -126,7 +121,7 @@ function formatDeals(data) {
 
 function formatRent(data) {
   if (!data?.districts?.length) return null;
-  let r = data.districts.map(d => d.district + ": $" + d.min_price_per_m2 + "–" + d.max_price_per_m2 + "/мес (" + d.count + " объявл.)").join("\n");
+  let r = data.districts.map(d => d.district + ": $" + d.min_price_per_m2 + "–$" + d.max_price_per_m2 + "/мес (" + d.count + " объявл.)").join("\n");
   if (data.top_deals?.length) r += "\n\nЛучшие предложения:\n" + data.top_deals.map((d,i) => (i+1) + ". " + d.district + " — $" + d.price_usd + "/мес (" + d.area + "м², " + d.rooms + "к)" + (d.id ? "\n   🔗 olx.uz/obyavlenie/" + d.id : "")).join("\n");
   return r;
 }
@@ -146,7 +141,7 @@ async function buildPromptData(item) {
   if (item.type === "PRICES") {
     const data = await apiGet(ROYEST_API_URL, ROYEST_API_TOKEN, "/api/prices");
     const formatted = formatPrices(data);
-    return { topic: formatted ? "Реальные данные мониторинга OLX за 7 дней:\n" + formatted : null, extra: "Напиши аналитический разбор — какие районы растут, какие падают, где выгоднее покупать сейчас." };
+    return { topic: formatted ? "Реальные данные мониторинга OLX за 7 дней:\n" + formatted : null, extra: "Аналитический разбор — какие районы растут, какие падают, где выгоднее покупать сейчас и почему." };
   }
   if (item.type === "DEALS") {
     const data = await apiGet(ROYEST_API_URL, ROYEST_API_TOKEN, "/api/deals");
@@ -163,7 +158,7 @@ async function buildPromptData(item) {
     const cheapest = await apiGet(SCRAPER_API_URL, SCRAPER_API_TOKEN, "/api/cheapest?limit=3");
     const nb = formatNewBuilds(data);
     const cheap = cheapest?.complexes?.length ? "\n\nСамые доступные:\n" + cheapest.complexes.map(c => "• " + c.name + " от $" + c.price_per_m2_usd + "/м²" + (c.installment_months ? ", рассрочка " + c.installment_months + " мес" : "") + (c.deadline ? ", сдача " + c.deadline : "")).join("\n") : "";
-    return { topic: nb ? "По данным мониторинга рынка новостроек:\n" + nb + cheap : null, extra: "Экспертный разбор: как выбрать новостройку, документы застройщика, финансовые гарантии." };
+    return { topic: nb ? nb + cheap : null, extra: "Как выбрать новостройку, документы застройщика, финансовые гарантии." };
   }
   return { topic: getWeeklyTopic(item.topic), extra: "" };
 }
@@ -171,27 +166,49 @@ async function buildPromptData(item) {
 async function generatePost(rubric, promptData) {
   const response = await claude.messages.create({
     model: "claude-sonnet-4-5",
-    max_tokens: 1400,
+    max_tokens: 2500,
     messages: [{ role: "user", content: `Ты эксперт по недвижимости Ташкента. Напиши Telegram пост.
 
 РУБРИКА: ${rubric}
-ДАННЫЕ: ${promptData.topic || "нет данных — используй экспертные знания о рынке Ташкента 2026"}
+ДАННЫЕ: ${promptData.topic || "используй экспертные знания о рынке Ташкента 2026"}
 УТОЧНЕНИЕ: ${promptData.extra || ""}
 
-СТРУКТУРА:
-1. Цепляющий заголовок (1 строка)
-2. 3-4 абзаца с конкретными цифрами и практическими советами
-3. Ключевой вывод
-4. Призыв к комментариям
-5. 3 хештега
-6. Разделитель: ——
-7. ПОЛНЫЙ перевод на узбекский язык — такой же объём как русская версия, не сокращай!
+СТРОГАЯ СТРУКТУРА (не нарушай):
 
-Без markdown. До 1800 символов. Год: 2026. Данные подаём как собственный мониторинг рынка.` }],
+=== РУССКИЙ ТЕКСТ ===
+[Цепляющий заголовок]
+
+[2-3 абзаца с конкретными цифрами и советами]
+
+[Ключевой вывод]
+
+[Призыв к комментариям]
+
+#хештег1 #хештег2 #хештег3
+
+——————————
+
+=== O'ZBEKCHA MATN ===
+[Такой же заголовок на узбекском]
+
+[Те же 2-3 абзаца полностью на узбекском, не сокращай]
+
+[Тот же вывод на узбекском]
+
+[Тот же призыв на узбекском]
+
+#hashteg1 #hashteg2 #hashteg3
+
+Требования:
+- Без markdown
+- Каждая часть (RU и UZ) — минимум 600 символов
+- Год: 2026
+- Данные подаём как собственный мониторинг рынка, без упоминания OLX или других источников` }],
   });
   return response.content[0].text;
 }
 
+// Отправка поста: фото отдельно, текст отдельно (лимит 4096 вместо 1024)
 async function publishPost(item) {
   console.log("[" + new Date().toISOString() + "] Генерирую: " + item.rubric);
   try {
@@ -200,12 +217,21 @@ async function publishPost(item) {
       getPexelsPhoto(item.rubric),
     ]);
     const text = await generatePost(item.rubric, promptData);
-    const caption = text.length > 1024 ? text.substring(0, 1021) + "..." : text;
+
+    // Сначала фото без подписи
     if (photoUrl) {
-      await bot.sendPhoto(CHANNEL_ID, photoUrl, { caption });
-    } else {
-      await bot.sendMessage(CHANNEL_ID, item.rubric + "\n\n" + text);
+      await bot.sendPhoto(CHANNEL_ID, photoUrl);
     }
+
+    // Потом полный текст отдельным сообщением — лимит 4096 символов
+    const chunks = [];
+    for (let i = 0; i < text.length; i += 4000) {
+      chunks.push(text.slice(i, i + 4000));
+    }
+    for (const chunk of chunks) {
+      await bot.sendMessage(CHANNEL_ID, chunk);
+    }
+
     console.log("[" + new Date().toISOString() + "] Опубликовано: " + item.rubric);
   } catch(e) {
     console.error("[" + new Date().toISOString() + "] Ошибка:", e.message);
@@ -259,12 +285,10 @@ async function publishDailyDigest() {
       "@sardorestate";
 
     const photoUrl = await getPexelsPhoto("📈 Дайджест дня");
-    const caption = text.length > 1024 ? text.substring(0, 1021) + "..." : text;
     if (photoUrl) {
-      await bot.sendPhoto(CHANNEL_ID, photoUrl, { caption });
-    } else {
-      await bot.sendMessage(CHANNEL_ID, text);
+      await bot.sendPhoto(CHANNEL_ID, photoUrl);
     }
+    await bot.sendMessage(CHANNEL_ID, text);
     console.log("[" + new Date().toISOString() + "] Дайджест опубликован");
   } catch(e) { console.error("Ошибка дайджеста:", e.message); }
 }
@@ -280,4 +304,4 @@ cron.schedule("0 15 * * *", () => publishDailyDigest());
 if (process.env.TEST_MODE === "true") publishPost(CONTENT_PLAN[0]);
 if (process.env.TEST_DIGEST === "true") publishDailyDigest();
 
-console.log("Автопостер v8 — Pexels фото, реальные данные OLX, полный узбекский перевод");
+console.log("Автопостер v9 — фото отдельно, полный текст без обрезки, полный UZ перевод");
